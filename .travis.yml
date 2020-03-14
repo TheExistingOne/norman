@@ -1,0 +1,15 @@
+language: rust
+
+script:
+  - cargo build --verbose --all
+  - cargo test --verbose --all
+
+rust:
+  - stable
+  - nightly
+jobs:
+  allow_failures:
+    - rust: nightly
+  fast_finish: true
+
+cache: cargo

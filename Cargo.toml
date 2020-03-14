@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "norman-client",
+    "norman-server",
+]
