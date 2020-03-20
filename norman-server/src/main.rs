@@ -1,8 +1,9 @@
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, Shutdown};
 use std::io::prelude::*;
 use std::{env, process};
+use cmd_lib::*;
 
-use norman_server::{ThreadPool, UserOptions};
+use norman_server::*;
 
 fn main() {
     let user_args = UserOptions::new(env::args()).unwrap_or_else(|err| {
@@ -10,7 +11,7 @@ fn main() {
         process::exit(1);
     });
 
-    let listener = TcpListener::bind("127.0.0.1:1315").unwrap();
+    let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
     let pool = ThreadPool::new(user_args.thread_count);
 
     for stream in listener.incoming() {
@@ -25,19 +26,21 @@ fn main() {
         let mut buffer = [0; 512];
         stream.read(&mut buffer).unwrap();
 
-        let sh_req = b"SHELL NORMAN/0.1";
+        let mut ret_stream = TcpStream::connect("127.0.0.1:7575").unwrap();
 
-        let (status_line, return_data) = if buffer.starts_with(sh_req) {
-            ("NORMAN/0.1 200 OK\r\n\r\n", "Request Ok")
-        } else {
-            ("NORMAN/0.1 500 FAIL\r\n\r\n", "Request Failed. Not supported norman call")
-        };
+        let packet = String::from_utf8(buffer.to_vec()).unwrap();
 
-        let contents = return_data;
+        println!("Got norman packet: {}", packet);
 
-        let response = format!("{}{}", status_line, contents);
+        let packet = NormanPacket::from_string(packet);
 
-        stream.write(response.as_bytes()).unwrap();
+        let comm_out = run_fun!("{}", &packet.data.data);
+
+        let response = NormanPacket::new(packet.header.version, packet.header.return_output, packet.header.service, RequestType::RETURN, Status::FINE{code: 200}, String::from("None"), comm_out.unwrap(), false);        
+
+        ret_stream.write(response.as_string().as_bytes()).unwrap();
         stream.flush().unwrap();
+        ret_stream.flush().unwrap();
+        ret_stream.shutdown(Shutdown::Both).unwrap();
     }
 }
